@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>您的低碳旅遊指數心理測驗</title>
+    <!-- 載入 Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 設定字體為 Inter -->
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f7f9fb;
+        }
+        /* Custom scrollbar for aesthetics */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; }
+        ::-webkit-scrollbar-thumb { background: #888; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #555; }
+    </style>
+</head>
+<body class="antialiased">
+
+    <div class="max-w-4xl mx-auto p-4 sm:p-6 lg:p-8">
+        <!-- Header -->
+        <header class="text-center mb-10 bg-white p-6 rounded-xl shadow-lg">
+            <h1 class="text-4xl font-extrabold text-teal-600 mb-2">🌱 低碳旅遊指數心理測驗</h1>
+            <p class="text-gray-600 text-lg">透過 10 個旅遊情境，了解您的綠色旅行潛力！</p>
+        </header>
+
+        <!-- User Info Input Fields (新增的資料區塊) -->
+        <div id="user-info-container" class="bg-white p-6 rounded-xl shadow-lg border-l-4 border-yellow-600 mb-8 space-y-4 transition-all duration-300">
+            <h3 class="text-xl font-bold text-gray-800 mb-4">✍️ 請填寫基本資料 (必填)</h3>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <!-- 班級 -->
+                <div>
+                    <label for="user-class" class="block text-sm font-medium text-gray-700">班級</label>
+                    <input type="text" id="user-class" placeholder="例如：二年丙班"
+                           class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border focus:border-teal-500 focus:ring-teal-500">
+                </div>
+                <!-- 座號 -->
+                <div>
+                    <label for="user-seat" class="block text-sm font-medium text-gray-700">座號</label>
+                    <input type="number" id="user-seat" placeholder="例如：08"
+                           class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border focus:border-teal-500 focus:ring-teal-500">
+                </div>
+                <!-- 姓名 -->
+                <div>
+                    <label for="user-name" class="block text-sm font-medium text-gray-700">姓名</label>
+                    <input type="text" id="user-name" placeholder="請輸入您的姓名"
+                           class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border focus:border-teal-500 focus:ring-teal-500">
+                </div>
+            </div>
+        </div>
+        <!-- Quiz Container -->
+        <div id="quiz-container" class="space-y-8">
+            <!-- Questions will be dynamically inserted here -->
+        </div>
+
+        <!-- Submit Button -->
+        <div class="mt-12 text-center">
+            <button id="calculate-btn"
+                    class="w-full sm:w-auto px-12 py-4 bg-green-600 text-white text-xl font-bold rounded-xl shadow-lg hover:bg-green-700 transition duration-300 transform hover:scale-[1.02] disabled:opacity-50">
+                計算我的指數
+            </button>
+        </div>
+
+        <!-- Result Display -->
+        <div id="result-display" class="mt-12 hidden">
+            <div class="bg-white p-8 rounded-xl shadow-2xl border-t-8 border-teal-500">
+                <h2 class="text-3xl font-bold text-gray-800 mb-4">✨ 您的測驗結果</h2>
+                <div id="result-score" class="text-2xl font-semibold mb-6 text-green-700"></div>
+
+                <div id="result-type" class="text-4xl font-extrabold mb-4"></div>
+
+                <div id="result-mindset" class="mb-6 border-l-4 border-teal-400 pl-4 py-2 bg-teal-50 text-gray-700">
+                    <p class="font-bold">您的心態：</p>
+                    <p id="mindset-text" class="mt-1"></p>
+                </div>
+
+                <div id="result-suggestion" class="text-gray-800">
+                    <p class="font-bold text-xl text-green-600 mb-2">💡 建議：</p>
+                    <p id="suggestion-text"></p>
+                </div>
+                
+                <button onclick="resetQuiz()" class="mt-8 px-6 py-2 bg-gray-200 text-gray-700 font-semibold rounded-lg hover:bg-gray-300 transition duration-150">
+                    重新測驗
+                </button>
+            </div>
+        </div>
+        
+        <!-- Instruction/Message Box (for alerts) -->
+        <div id="message-box" class="fixed bottom-4 right-4 p-4 bg-red-500 text-white rounded-lg shadow-xl z-50 transition-transform duration-300 transform translate-x-full hidden">
+            請完成所有題目！
+        </div>
+
+    </div>
+
+<script type="module">
+    // Firebase 模組導入
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+    import { getAuth, signInWithCustomToken, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    import { getFirestore, collection, addDoc, serverTimestamp, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+    // Global Firebase vars
+    let db, auth, userId;
+
+    // 定義測驗資料：題目、選項文字和對應的分數
+    const quizData = [
+        {
+            id: 1,
+            question: "規劃一趟 300 公里左右的短途旅行，您會選擇哪種交通工具？",
+            options: [
+                { text: "搭乘火車或高鐵", score: 4 },
+                { text: "自己開車或搭乘飛機", score: 1 },
+                { text: "選擇長途巴士", score: 3 },
+                { text: "選擇私人汽車，但會找人共乘", score: 2 }
+            ]
+        },
+        {
+            id: 2,
+            question: "選擇住宿時，您最優先考慮的是？",
+            options: [
+                { text: "國際連鎖五星級飯店，享受完善設施", score: 1 },
+                { text: "具有當地特色、且獲得環保認證的民宿或旅店", score: 4 },
+                { text: "價格適中的中等飯店，不特別考慮環保標章", score: 2 },
+                { text: "選擇青年旅館或露營，以減少資源消耗", score: 3 }
+            ]
+        },
+        {
+            id: 3,
+            question: "準備行李時，您對於「輕便」的看法是？",
+            options: [
+                { text: "盡可能少帶，只帶手提行李上機/上車", score: 4 },
+                { text: "帶一個標準尺寸的行李箱，裝滿所有需要的東西", score: 2 },
+                { text: "帶多個大包小包，以備不時之需", score: 1 },
+                { text: "只帶必需品，打算到目的地再購買其他日常用品", score: 3 }
+            ]
+        },
+        {
+            id: 4,
+            question: "旅遊期間的飲食選擇，您會傾向於？",
+            options: [
+                { text: "優先尋找當地當季的蔬食或特色美食", score: 4 },
+                { text: "專挑自己熟悉的西式速食或連鎖餐廳", score: 1 },
+                { text: "嘗試當地料理，但會以肉類或海鮮大餐為主", score: 2 },
+                { text: "自備環保餐具和水瓶，盡量減少外帶垃圾", score: 3 }
+            ]
+        },
+        {
+            id: 5,
+            question: "飯店房間內，您對於水電和備品的使用態度是？",
+            options: [
+                { text: "既然付了錢，就盡情使用所有提供的資源", score: 1 },
+                { text: "會重複使用毛巾，並在離開房間時確保關燈/冷氣", score: 4 },
+                { text: "只會節約用水，對節電不太在意", score: 2 },
+                { text: "會自備所有盥洗用品，以減少一次性塑膠的使用", score: 3 }
+            ]
+        },
+        {
+            id: 6,
+            question: "在旅途中製造的垃圾（如飲料瓶、包裝）如何處理？",
+            options: [
+                { text: "全部丟進一般垃圾桶，反正有人會處理", score: 1 },
+                { text: "仔細分類，並找到適當的回收箱", score: 4 },
+                { text: "使用可重複利用的水瓶和杯子，但其他垃圾隨意丟棄", score: 3 },
+                { text: "只有看到明顯的回收桶時才會試著回收", score: 2 }
+            ]
+        },
+        {
+            id: 7,
+            question: "選擇旅遊紀念品時，您會考慮什麼？",
+            options: [
+                { text: "購買大量生產的標準旅遊紀念品", score: 1 },
+                { text: "購買當地藝術家的手工藝品或環保材料製成的產品", score: 4 },
+                { text: "收集當地的自然物（例如貝殼、石頭，在允許的情況下）", score: 2 },
+                { text: "透過攝影記錄美好回憶，不買任何實體紀念品", score: 3 }
+            ]
+        },
+        {
+            id: 8,
+            question: "規劃行程的節奏，您傾向於？",
+            options: [
+                { text: "盡可能安排最多景點，充分利用時間", score: 1 },
+                { text: "選擇少數幾個目的地，深入體驗當地生活", score: 4 },
+                { text: "嚴格遵循旅行社或既定的觀光路線", score: 2 },
+                { text: "每天隨心所欲地決定要去哪裡", score: 3 }
+            ]
+        },
+        {
+            id: 9,
+            question: "遇到需要爬樓梯或走一小段路的情況，您的反應是？",
+            options: [
+                { text: "堅持找電梯或電動步道", score: 1 },
+                { text: "樂意選擇爬樓梯，視為運動和節能", score: 4 },
+                { text: "看看其他人怎麼做，再決定", score: 2 },
+                { text: "如果行李不重，就會選擇走樓梯", score: 3 }
+            ]
+        },
+        {
+            id: 10,
+            question: "旅程結束後，您分享旅遊經歷時的重點是？",
+            options: [
+                { text: "分享自己享受的豪華設施和美食", score: 1 },
+                { text: "分享當地保育行動、環保選擇和低碳經驗", score: 4 },
+                { text: "只是分享去了哪些地方、拍了哪些美照", score: 2 },
+                { text: "規劃下一次去更偏遠、人跡罕至的地方旅行", score: 3 }
+            ]
+        }
+    ];
+
+    // 結果分析資料
+    const results = {
+        A: {
+            title: "類型 A：低碳旅行家",
+            range: "35 - 40分",
+            color: "text-green-600",
+            mindset: "您是低碳旅遊的先驅者，具備高度的環境意識，並將永續原則融入旅遊的每一個環節。您不僅為自己減少碳足跡，也積極影響身邊的人。您的每一次旅行都是一次對地球的溫和承諾。",
+            suggestion: "繼續探索新的綠色科技和方法，考慮分享您的綠色旅遊經驗，成為社群的領導者。"
+        },
+        B: {
+            title: "類型 B：綠色探索者",
+            range: "25 - 34分",
+            color: "text-blue-600",
+            mindset: "您是一位有意識的探險家。您樂於嘗試並接受低碳旅遊的理念，在大部分情境下都能做出環保的選擇。您已經具備良好的環保習慣，但偶爾仍會受到便利性或傳統習慣的影響。",
+            suggestion: "試著將「慢活」哲學帶入行程規劃中，減少轉換交通工具的頻率，並深入了解您所選擇的綠色旅館/品牌的背後故事。"
+        },
+        C: {
+            title: "類型 C：潛力綠遊客",
+            range: "15 - 24分",
+            color: "text-yellow-600",
+            mindset: "您對低碳旅遊的概念有所耳聞，但在實際操作中，往往優先考慮旅遊的舒適度和便利性。您有成為綠色旅行家的潛力，只需更明確地將環保意識轉化為行動。",
+            suggestion: "從最容易實踐的部分開始，例如：全程自備水瓶和餐具，或是選擇在旅途中搭乘一次大眾運輸工具。從小處著手，積少成多。"
+        },
+        D: {
+            title: "類型 D：傳統觀光客",
+            range: "10 - 14分",
+            color: "text-red-600",
+            mindset: "您目前仍是比較注重傳統旅遊體驗的觀光客。您可能尚未意識到個人旅遊選擇對環境的影響，或尚未找到將環保融入旅遊的方法。您的選擇往往以效率和個人享受為優先。",
+            suggestion: "嘗試閱讀關於氣候變遷與旅遊影響的資訊。下次旅行時，試著挑戰自己只選擇一個「低碳」行為，例如：在當地市場購買食物以減少食物里程。每邁出一小步，都是對地球的一大貢獻。"
+        }
+    };
+
+    const quizContainer = document.getElementById('quiz-container');
+    const calculateBtn = document.getElementById('calculate-btn');
+    const resultDisplay = document.getElementById('result-display');
+    const messageBox = document.getElementById('message-box');
+    const userInfoContainer = document.getElementById('user-info-container'); // 新增
+
+    // 1. Firebase 初始化與登入
+    async function initFirebase() {
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+
+        if (Object.keys(firebaseConfig).length === 0) {
+            console.error("Firebase configuration is missing.");
+            showMessage("資料庫設定遺失，分數無法儲存。", 'bg-red-500');
+            return;
+        }
+
+        try {
+            const app = initializeApp(firebaseConfig);
+            db = getFirestore(app);
+            auth = getAuth(app);
+            setLogLevel('Debug'); // 開啟 Firebase 偵錯日誌
+
+            // 登入
+            if (typeof __initial_auth_token !== 'undefined') {
+                await signInWithCustomToken(auth, __initial_auth_token);
+            } else {
+                await signInAnonymously(auth);
+            }
+            // 取得使用者ID，未登入則使用隨機ID
+            userId = auth.currentUser?.uid || crypto.randomUUID();
+            console.log("Firebase initialized. User ID:", userId);
+            
+            // 載入測驗並綁定事件
+            renderQuiz();
+            calculateBtn.addEventListener('click', calculateScore);
+
+        } catch (error) {
+            console.error("Firebase Initialization or Auth Error:", error);
+            showMessage("資料庫連線失敗，分數無法儲存。", 'bg-red-500');
+        }
+    }
+
+    // 2. 儲存結果到 Firestore
+    async function saveResultToFirestore(score, resultTypeTitle) {
+        if (!db || !userId) {
+            console.error("Database not ready or User ID missing.");
+            showMessage("無法儲存結果，請檢查連線。", 'bg-red-500');
+            return;
+        }
+
+        const userNameInput = document.getElementById('user-name').value.trim();
+        const userClassInput = document.getElementById('user-class').value.trim();
+        const userSeatInput = document.getElementById('user-seat').value.trim();
+
+
+        // 使用 public 路徑讓其他人可以看到結果
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const collectionPath = `artifacts/${appId}/public/data/quiz_results`;
+
+        const resultData = {
+            userId: userId,
+            score: score,
+            resultType: resultTypeTitle,
+            timestamp: serverTimestamp(), // 記錄儲存時間
+            userName: userNameInput,       // 儲存姓名
+            userClass: userClassInput,     // 儲存班級
+            userSeat: userSeatInput,       // 儲存座號
+        };
+
+        try {
+            const docRef = await addDoc(collection(db, collectionPath), resultData);
+            showMessage(`分數已儲存！記錄ID: ${docRef.id.substring(0, 4)}`, 'bg-green-600');
+        } catch (e) {
+            console.error("Error adding document: ", e);
+            showMessage("儲存分數時發生錯誤。", 'bg-red-500');
+        }
+    }
+
+    // 3. 渲染測驗題目到網頁上
+    function renderQuiz() {
+        quizData.forEach(q => {
+            const questionCard = document.createElement('div');
+            questionCard.className = 'bg-white p-6 rounded-xl shadow-lg border-l-4 border-teal-500';
+            
+            const questionTitle = document.createElement('h3');
+            questionTitle.className = 'text-xl font-semibold text-gray-800 mb-4';
+            questionTitle.textContent = `${q.id}. ${q.question}`;
+            questionCard.appendChild(questionTitle);
+
+            const optionsContainer = document.createElement('div');
+            optionsContainer.className = 'space-y-3';
+
+            q.options.forEach((option, index) => {
+                const label = document.createElement('label');
+                label.className = 'flex items-center p-3 border border-gray-200 rounded-lg cursor-pointer hover:bg-teal-50 transition duration-150';
+                
+                const input = document.createElement('input');
+                input.type = 'radio';
+                input.name = `question-${q.id}`;
+                input.value = option.score; // 儲存分數
+                input.className = 'h-5 w-5 text-teal-600 focus:ring-teal-500 border-gray-300 transform scale-110';
+                
+                // 讓點擊標籤的任何地方都能觸發選擇
+                label.onclick = function() {
+                    input.checked = true;
+                    // 增加選中時的視覺回饋
+                    document.querySelectorAll(`input[name="question-${q.id}"]`).forEach(radio => {
+                        radio.parentElement.classList.remove('bg-teal-100', 'ring-2', 'ring-teal-500');
+                    });
+                    this.classList.add('bg-teal-100', 'ring-2', 'ring-teal-500');
+                };
+
+                const span = document.createElement('span');
+                span.className = 'ml-3 text-base text-gray-700 font-medium';
+                span.textContent = option.text;
+                
+                label.appendChild(input);
+                label.appendChild(span);
+                optionsContainer.appendChild(label);
+            });
+
+            questionCard.appendChild(optionsContainer);
+            quizContainer.appendChild(questionCard);
+        });
+    }
+
+    // 4. 計算分數並顯示結果 (新增了資料檢查)
+    function calculateScore() {
+        let totalScore = 0;
+        let allAnswered = true;
+
+        // 檢查基本資料是否填寫
+        const userNameInput = document.getElementById('user-name').value.trim();
+        const userClassInput = document.getElementById('user-class').value.trim();
+        const userSeatInput = document.getElementById('user-seat').value.trim();
+
+        if (userNameInput === "" || userClassInput === "" || userSeatInput === "") {
+            showMessage("請填寫班級、座號和姓名！", 'bg-yellow-600');
+            // 標記基本資料區塊
+            userInfoContainer.classList.add('border-red-500', 'ring-2', 'ring-red-500');
+            userInfoContainer.scrollIntoView({ behavior: 'smooth' });
+            return;
+        } else {
+            userInfoContainer.classList.remove('border-red-500', 'ring-2', 'ring-red-500');
+        }
+        
+        // 檢查問卷題目是否填寫
+        quizData.forEach(q => {
+            const selector = `input[name="question-${q.id}"]:checked`;
+            const selectedOption = document.querySelector(selector);
+            
+            // 移除舊的紅色邊框
+            const questionCard = document.querySelector(`#quiz-container > div:nth-child(${q.id})`);
+            questionCard.classList.remove('border-red-500', 'border-l-4');
+            questionCard.classList.add('border-teal-500', 'border-l-4');
+
+
+            if (selectedOption) {
+                totalScore += parseInt(selectedOption.value);
+            } else {
+                allAnswered = false;
+                // 標記未回答的題目
+                questionCard.classList.remove('border-teal-500');
+                questionCard.classList.add('border-red-500');
+            }
+        });
+
+        if (!allAnswered) {
+            showMessage("請完成所有題目才能計算分數！", 'bg-red-500');
+            // 滾動到第一個未回答的題目
+            document.querySelector('.border-red-500').scrollIntoView({ behavior: 'smooth' });
+            return;
+        }
+
+        displayResult(totalScore);
+    }
+
+    // 5. 根據分數顯示對應的分析結果 
+    function displayResult(score) {
+        let resultType;
+        if (score >= 35) {
+            resultType = results.A;
+        } else if (score >= 25) {
+            resultType = results.B;
+        } else if (score >= 15) {
+            resultType = results.C;
+        } else {
+            resultType = results.D;
+        }
+
+        // 隱藏測驗，顯示結果
+        userInfoContainer.classList.add('hidden'); // 隱藏個人資料區
+        quizContainer.classList.add('hidden');
+        calculateBtn.classList.add('hidden');
+        resultDisplay.classList.remove('hidden');
+
+        // 更新結果內容
+        document.getElementById('result-score').textContent = `您的總分為：${score} 分 (總分範圍: ${resultType.range})`;
+        
+        const resultTypeEl = document.getElementById('result-type');
+        resultTypeEl.className = `text-4xl font-extrabold mb-4 ${resultType.color}`;
+        resultTypeEl.textContent = resultType.title;
+
+        document.getElementById('mindset-text').textContent = resultType.mindset;
+        document.getElementById('suggestion-text').textContent = resultType.suggestion;
+
+        // 呼叫儲存結果到 Firestore
+        saveResultToFirestore(score, resultType.title); 
+
+        // 滾動到結果區域
+        resultDisplay.scrollIntoView({ behavior: 'smooth' });
+    }
+
+    // 6. 重設測驗
+    window.resetQuiz = function() {
+        userInfoContainer.classList.remove('hidden'); // 顯示個人資料區
+        quizContainer.classList.remove('hidden');
+        calculateBtn.classList.remove('hidden');
+        resultDisplay.classList.add('hidden');
+
+        // 清除個人資料欄位
+        document.getElementById('user-name').value = '';
+        document.getElementById('user-class').value = '';
+        document.getElementById('user-seat').value = '';
+        userInfoContainer.classList.remove('border-red-500', 'ring-2', 'ring-red-500');
+
+        // 清除所有選中的選項
+        document.querySelectorAll('input[type="radio"]').forEach(radio => {
+            radio.checked = false;
+            radio.parentElement.classList.remove('bg-teal-100', 'ring-2', 'ring-teal-500');
+        });
+        // 清除未回答的題目標記
+        document.querySelectorAll('.border-red-500').forEach(card => {
+            card.classList.remove('border-red-500');
+            card.classList.add('border-teal-500');
+        });
+
+        // 滾動到頂部
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+    
+    // 7. 訊息提示框 (取代 alert) 
+    function showMessage(msg, colorClass) {
+        messageBox.textContent = msg;
+        messageBox.className = `fixed bottom-4 right-4 p-4 text-white rounded-lg shadow-xl z-50 transition-transform duration-300 transform translate-x-0`;
+        messageBox.classList.remove('bg-red-500', 'bg-green-600', 'bg-blue-500', 'bg-yellow-600');
+        messageBox.classList.add(colorClass);
+        messageBox.classList.remove('hidden');
+
+        setTimeout(() => {
+            messageBox.classList.add('translate-x-full');
+            // 使用 setTimeout 確保動畫完成後再隱藏
+            setTimeout(() => { messageBox.classList.add('hidden'); }, 300);
+        }, 3000);
+    }
+
+    // 初始載入：開始 Firebase 初始化
+    initFirebase();
+
+</script>
+
+</body>
+</html>
